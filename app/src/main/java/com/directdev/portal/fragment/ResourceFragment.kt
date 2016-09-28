@@ -2,6 +2,7 @@ package com.directdev.portal.fragment
 
 import android.app.Fragment
 import android.content.res.ColorStateList
+import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.os.Bundle
 import android.support.design.widget.Snackbar
@@ -23,10 +24,7 @@ import com.directdev.portal.utils.snack
 import io.realm.Realm
 import io.realm.RealmResults
 import kotlinx.android.synthetic.main.fragment_resources.*
-import org.jetbrains.anko.AnkoLogger
-import org.jetbrains.anko.ctx
-import org.jetbrains.anko.onClick
-import org.jetbrains.anko.runOnUiThread
+import org.jetbrains.anko.*
 import kotlin.properties.Delegates
 
 /**
@@ -53,15 +51,7 @@ class ResourceFragment : Fragment(), AnkoLogger {
         } catch (e: NoSuchMethodError) {
         }
         refreshresourceButton.onClick {
-            view.snack("Refreshing data, please wait...", Snackbar.LENGTH_INDEFINITE)
-            DataApi.fetchResources(ctx, courses).subscribe({
-                view?.snack("Success")
-                runOnUiThread {
-                    setRecycler(courseResourceSpinner.selectedView as TextView, courses)
-                }
-            }, {
-                view?.snack("Failed")
-            })
+            showCaptchaDialog(courses)
         }
         val courseName = courses.map { it.courseName }.toSet()
         val spinnerAdapter = ArrayAdapter(ctx, android.R.layout.simple_spinner_dropdown_item, courseName.toList())
@@ -101,5 +91,49 @@ class ResourceFragment : Fragment(), AnkoLogger {
         resourceRecycler.visibility = View.VISIBLE
         resourceRecycler.layoutManager = LinearLayoutManager(ctx)
         resourceRecycler.adapter = ResourcesRecyclerAdapter(ctx, outlineMap.toList(), resources)
+    }
+
+    private fun showCaptchaDialog(courses: RealmResults<CourseModel>) {
+        DataApi.fetchCaptcha(ctx).subscribe({
+            val inputStream = it.byteStream()
+            val bitmap = BitmapFactory.decodeStream(inputStream)
+            var answer = ""
+            alert("Captcha") {
+                customView {
+                    linearLayout() {
+                        val captchaImage = imageView {
+                            setImageBitmap(bitmap)
+                            lparams(width = dip(90), height = dip(32)) {
+                                horizontalMargin = dip(5)
+                                topMargin = dip(8)
+                                leftMargin = dip(16)
+                            }
+                        }
+                        val captchaAnswer = editText {
+                            lparams(width = matchParent) {
+                                rightMargin = dip(16)
+                            }
+                            hint = "Answer"
+                            onKey { i, keyEvent ->
+                                answer = text.toString()
+                                false
+                            }
+                        }
+                    }
+                    yesButton {
+                        view.snack("Refreshing data, please wait...", Snackbar.LENGTH_INDEFINITE)
+                        DataApi.fetchResources(ctx, courses, answer).subscribe({
+                            view?.snack("Success")
+                            runOnUiThread {
+                                setRecycler(courseResourceSpinner.selectedView as TextView, courses)
+                            }
+                        }, {
+                            view?.snack("Failed")
+                        })
+                    }
+                    noButton {}
+                }
+            }.show()
+        }, { })
     }
 }

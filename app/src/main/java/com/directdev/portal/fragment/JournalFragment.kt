@@ -1,6 +1,7 @@
 package com.directdev.portal.fragment
 
 import android.app.Fragment
+import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.os.Bundle
 import android.support.design.widget.Snackbar
@@ -18,9 +19,8 @@ import com.directdev.portal.utils.snack
 import io.realm.Realm
 import io.realm.RealmResults
 import kotlinx.android.synthetic.main.fragment_journal.*
+import org.jetbrains.anko.*
 import org.jetbrains.anko.appcompat.v7.onMenuItemClick
-import org.jetbrains.anko.ctx
-import org.jetbrains.anko.startActivity
 import org.joda.time.DateTime
 import org.joda.time.Hours
 import org.joda.time.format.DateTimeFormat
@@ -69,10 +69,8 @@ class JournalFragment : Fragment() {
         val journalToday = journalDates?.filter {
             it.date == today.toDate()
         } ?: return
-        if (journalToday.size > 0) {
-            if (journalToday[0].session.size > 0) {
-                journalToolbar.title = "Today - " + today.toString(DateTimeFormat.forPattern("dd MMMM"))
-            }
+        if (journalToday.size > 0 && journalToday[0].session.size > 0) {
+            journalToolbar.title = "Today - " + today.toString(DateTimeFormat.forPattern("dd MMMM"))
         } else journalToolbar.title = "Today - Holiday"
         if (!menuInflated) {
             journalToolbar.inflateMenu(R.menu.menu_journal)
@@ -92,14 +90,50 @@ class JournalFragment : Fragment() {
         }
     }
 
+    private fun showCaptchaDialog() {
+        DataApi.fetchCaptcha(ctx).subscribe({
+            val inputStream = it.byteStream()
+            val bitmap = BitmapFactory.decodeStream(inputStream)
+            var answer = ""
+            alert("Captcha") {
+                customView {
+                    linearLayout() {
+                        val captchaImage = imageView {
+                            setImageBitmap(bitmap)
+                            lparams(width = dip(90), height = dip(32)) {
+                                horizontalMargin = dip(5)
+                                topMargin = dip(8)
+                                leftMargin = dip(16)
+                            }
+                        }
+                        val captchaAnswer = editText {
+                            lparams(width = matchParent) {
+                                rightMargin = dip(16)
+                            }
+                            hint = "Answer"
+                            onKey { i, keyEvent ->
+                                answer = text.toString()
+                                false
+                            }
+                        }
+                    }
+                    yesButton {
+                        view?.snack("Updating", Snackbar.LENGTH_INDEFINITE)
+                        DataApi.fetchData(ctx, answer).subscribe({
+                            view?.snack("Success")
+                        }, {
+                            view?.snack(DataApi.decideFailedString(it))
+                        })
+                    }
+                    noButton {}
+                }
+            }.show()
+        }, { })
+    }
+
     private fun update(): Boolean {
-        view?.snack("Updating", Snackbar.LENGTH_INDEFINITE)
         if (DataApi.isActive) return true
-        DataApi.fetchData(ctx).subscribe({
-            view?.snack("Success")
-        }, {
-            view?.snack(DataApi.decideFailedString(it))
-        })
+        showCaptchaDialog()
         return true
     }
 

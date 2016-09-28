@@ -1,5 +1,6 @@
 package com.directdev.portal.activity
 
+import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Bundle
@@ -38,6 +39,43 @@ class SigninActivity : AppCompatActivity(), AnkoLogger {
         getNotif()
     }
 
+    private fun showCaptchaDialog() {
+        DataApi.fetchCaptcha(ctx).subscribe({
+            val inputStream = it.byteStream()
+            val bitmap = BitmapFactory.decodeStream(inputStream)
+            var answer = ""
+            alert("Captcha") {
+                customView {
+                    linearLayout() {
+                        val captchaImage = imageView {
+                            setImageBitmap(bitmap)
+                            lparams(width = dip(90), height = dip(32)) {
+                                horizontalMargin = dip(5)
+                                topMargin = dip(8)
+                                leftMargin = dip(16)
+                            }
+                        }
+                        val captchaAnswer = editText {
+                            lparams(width = matchParent) {
+                                rightMargin = dip(16)
+                            }
+                            hint = "Answer"
+                            onKey { i, keyEvent ->
+                                answer = text.toString()
+                                false
+                            }
+                        }
+                    }
+                    yesButton {
+                        switchLoginTextView()
+                        signInCallToServer(answer)
+                    }
+                    noButton {}
+                }
+            }.show()
+        }, { })
+    }
+
     private fun signIn() {
         inputMethodManager.hideSoftInputFromWindow(signInCard.windowToken, 0)
         if (!connectivityManager.isNetworkAvailable()) {
@@ -46,8 +84,7 @@ class SigninActivity : AppCompatActivity(), AnkoLogger {
         }
         if (DataApi.isActive) return
         saveCredentials()
-        switchLoginTextView()
-        signInCallToServer()
+        showCaptchaDialog()
     }
 
     private fun setBannerFont() {
@@ -60,28 +97,10 @@ class SigninActivity : AppCompatActivity(), AnkoLogger {
         formUsername.text.toString().savePref(this, R.string.username)
     }
 
-    private fun switchLoginTextView() {
-        runOnUiThread {
-            textSwitch.showNext()
-            iconSwitch.showNext()
-        }
-    }
-
-    private fun setAnalyticsUserProperties() {
-        mFirebaseAnalytics.setUserProperty("degree", this.readPref(R.string.major, "") as String)
-        mFirebaseAnalytics.setUserProperty("major", this.readPref(R.string.degree, "") as String)
-        mFirebaseAnalytics.setUserProperty("generation", (this.readPref(R.string.nim, "") as String).substring(0, 3))
-    }
-
-    private fun signInCallToServer() {
-        DataApi.initializeApp(this).subscribe({
+    private fun signInCallToServer(captcha: String) {
+        DataApi.initializeApp(this, captcha).subscribe({
             true.savePref(ctx, R.string.isLoggedIn)
-            setAnalyticsUserProperties()
-            Answers.getInstance().logLogin(LoginEvent()
-                    .putSuccess(true)
-                    .putCustomAttribute("Degree", this.readPref(R.string.major, "") as String)
-                    .putCustomAttribute("Major", this.readPref(R.string.degree, "") as String)
-                    .putCustomAttribute("Generation", (this.readPref(R.string.nim, "") as String).substring(0, 3)))
+            signinAnalytics()
             startActivity<MainActivity>()
         }, {
             false.savePref(ctx, R.string.isLoggedIn)
@@ -93,12 +112,19 @@ class SigninActivity : AppCompatActivity(), AnkoLogger {
             val snackString = DataApi.decideFailedString(it)
             if (it is SocketTimeoutException) {
                 signinActivity?.snack(snackString, Snackbar.LENGTH_LONG) {
-                    action("retry", Color.YELLOW, { signInCallToServer() })
+                    action("retry", Color.YELLOW, { signInCallToServer(captcha) })
                 }
             } else {
                 signinActivity?.snack(snackString, Snackbar.LENGTH_LONG)
             }
         })
+    }
+
+    private fun switchLoginTextView() {
+        runOnUiThread {
+            textSwitch.showNext()
+            iconSwitch.showNext()
+        }
     }
 
     private fun getNotif() {
@@ -110,6 +136,17 @@ class SigninActivity : AppCompatActivity(), AnkoLogger {
                 negativeButton("Ok, Got it")
             }.show()
         }
+    }
+
+    private fun signinAnalytics() {
+        mFirebaseAnalytics.setUserProperty("degree", this.readPref(R.string.major, "") as String)
+        mFirebaseAnalytics.setUserProperty("major", this.readPref(R.string.degree, "") as String)
+        mFirebaseAnalytics.setUserProperty("generation", (this.readPref(R.string.nim, "") as String).substring(0, 3))
+        Answers.getInstance().logLogin(LoginEvent()
+                .putSuccess(true)
+                .putCustomAttribute("Degree", this.readPref(R.string.major, "") as String)
+                .putCustomAttribute("Major", this.readPref(R.string.degree, "") as String)
+                .putCustomAttribute("Generation", (this.readPref(R.string.nim, "") as String).substring(0, 3)))
     }
 
 }

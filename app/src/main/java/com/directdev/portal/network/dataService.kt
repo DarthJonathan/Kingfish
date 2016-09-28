@@ -14,7 +14,6 @@ interface DataService {
     fun signIn(@Field("uid") uid: String,
                @Field("pass") pass: String,
                @Field("defaultLoginReal") defaultLoginReal: String,
-               @Field("defaultLoginRealHash") defaultLoginRealHash: String,
                @Header("Cookie") cookie: String,
                @Field("ctl00\$ContentPlaceHolder1\$SubmitButtonBM") button: String = "Login")
             : Single<Response<String>>
@@ -68,4 +67,8 @@ interface DataService {
                       @Path("ssrComponent") ssrComponent: String,
                       @Path("classNumber") classNumber: String,
                       @Header("Cookie") cookie: String): Single<List<AssignmentIndividualModel>>
+
+    @Headers("Referer: https://binusmaya.binus.ac.id/login/")
+    @GET("https://binusmaya.binus.ac.id/login/captcha.php")
+    fun getCaptchaImage(@Header("Cookie") cookie: String): Single<ResponseBody>
 }

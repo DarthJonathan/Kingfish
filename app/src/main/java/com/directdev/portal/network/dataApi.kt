@@ -37,9 +37,9 @@ object DataApi {
     private val baseUrl = "https://binusmaya.binus.ac.id/services/ci/index.php/"
     private val api = buildRetrofit()
 
-    fun initializeApp(ctx: Context): Single<Unit> {
+    fun initializeApp(ctx: Context, captcha: String): Single<Unit> {
         var cookie = ctx.readPref(R.string.cookie, "") as String
-        return signIn(ctx, cookie).flatMap {
+        return signIn(ctx, cookie, captcha).flatMap {
             val headerCookie = it.headers().get("Set-Cookie")
             if (headerCookie != null) {
                 if (cookie == "") cookie = headerCookie
@@ -93,10 +93,10 @@ object DataApi {
         }
     }
 
-    fun fetchData(ctx: Context): Single<Unit> {
+    fun fetchData(ctx: Context, captcha: String): Single<Unit> {
         var cookie = ctx.readPref(R.string.cookie, "") as String
         val realm = Realm.getDefaultInstance()
-        return signIn(ctx, cookie).flatMap {
+        return signIn(ctx, cookie, captcha).flatMap {
             val term = realm.where(TermModel::class.java).max("value")
             val headerCookie = it.headers().get("Set-Cookie")
             if (headerCookie != null) {
@@ -119,10 +119,10 @@ object DataApi {
         }
     }
 
-    fun fetchResources(ctx: Context, data: RealmResults<CourseModel>): Single<Unit> {
+    fun fetchResources(ctx: Context, data: RealmResults<CourseModel>, captcha: String): Single<Unit> {
         isActive = true
         var cookie = ctx.readPref(R.string.cookie, "") as String
-        return signIn(ctx, cookie).flatMap {
+        return signIn(ctx, cookie, captcha).flatMap {
             val headerCookie = it.headers().get("Set-Cookie")
             if (headerCookie != null) {
                 cookie = headerCookie
@@ -164,6 +164,19 @@ object DataApi {
         }.doOnSuccess {
             isActive = false
         }
+    }
+
+    fun fetchCaptcha(ctx: Context): Single<ResponseBody> {
+        var cookie = ctx.readPref(R.string.cookie, "") as String
+        return signIn(ctx, cookie).flatMap {
+            val headerCookie = it.headers().get("Set-Cookie")
+            if (headerCookie != null) {
+                cookie = headerCookie
+                cookie.savePref(ctx, R.string.cookie)
+            }
+            api.getCaptchaImage(cookie).subscribeOn(Schedulers.io())
+        }.subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
     }
 
     fun fetchAssignment(ctx: Context, data: RealmResults<CourseModel>): Single<Unit> {
@@ -208,7 +221,7 @@ object DataApi {
             is ConnectException -> "Failed to connect to Binusmaya"
             is SSLException -> "Failed to connect to Binusmaya"
             is UnknownHostException -> "Failed to connect to Binusmaya"
-            is IOException -> "Wrong email or password"
+            is IOException -> "Wrong username, password, or captcha"
             is IndexOutOfBoundsException -> {
                 Crashlytics.log("IndexOutOfBoundsException")
                 Crashlytics.logException(it)
@@ -223,11 +236,10 @@ object DataApi {
     }
 
 
-    private fun signIn(ctx: Context, cookie: String = "") = api.signIn(
+    private fun signIn(ctx: Context, cookie: String = "", captcha: String = "") = api.signIn(
             ctx.readPref(R.string.username, "") as String,
             ctx.readPref(R.string.password, "") as String,
-            "4Y32H5",
-            "2274533332",
+            "",
             cookie)
             .subscribeOn(Schedulers.io())
             .observeOn(AndroidSchedulers.mainThread())
